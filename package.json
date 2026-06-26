@@ -1,0 +1,13 @@
+{
+  "name": "rum-biess-pq-monitor",
+  "version": "1.0.0",
+  "description": "Monitoreo RUM BIESS PQ con Playwright y BigQuery",
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "latest",
+    "playwright": "latest"
+  }
+}
