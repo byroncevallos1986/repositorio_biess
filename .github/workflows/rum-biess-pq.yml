@@ -1,0 +1,121 @@
+name: RUM BIESS PQ - Playwright BigQuery
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # Ejecución cada 10 minutos.
+    # Se usan minutos desplazados para evitar alta carga al inicio de cada hora.
+    - cron: "7,17,27,37,47,57 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rum-biess-pq-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Validar pagina PQ BIESS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      BIGQUERY_PROJECT_ID: rumdb-499414
+      BIGQUERY_DATASET_ID: rumds
+      BIGQUERY_TABLE_ID: tb_monitor
+
+    steps:
+      - name: Descargar codigo del repositorio
+        uses: actions/checkout@v6
+
+      - name: Mostrar hora de ejecucion
+        shell: bash
+        run: |
+          echo "Hora UTC:"
+          date
+          echo "Hora Ecuador:"
+          TZ='America/Guayaquil' date
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Crear archivo temporal de credenciales Google Cloud
+        shell: bash
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$GCP_SERVICE_ACCOUNT" ]; then
+            echo "ERROR: No existe el secret GCP_SERVICE_ACCOUNT en GitHub Actions."
+            echo "Crear el secret en:"
+            echo "Settings > Secrets and variables > Actions > New repository secret"
+            echo "Name: GCP_SERVICE_ACCOUNT"
+            echo "Secret: contenido completo del archivo JSON de la cuenta de servicio de Google Cloud"
+            exit 1
+          fi
+
+          CREDENTIALS_FILE="$RUNNER_TEMP/gcp-service-account.json"
+
+          printf '%s' "$GCP_SERVICE_ACCOUNT" > "$CREDENTIALS_FILE"
+
+          chmod 600 "$CREDENTIALS_FILE"
+
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE" >> "$GITHUB_ENV"
+
+          echo "Validando estructura del archivo JSON de credenciales..."
+          node -e "
+          const fs = require('fs');
+          const file = process.env.RUNNER_TEMP + '/gcp-service-account.json';
+          const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+
+          if (!json.client_email) {
+            throw new Error('El JSON no contiene client_email');
+          }
+
+          if (!json.private_key) {
+            throw new Error('El JSON no contiene private_key');
+          }
+
+          if (!json.project_id) {
+            throw new Error('El JSON no contiene project_id');
+          }
+
+          console.log('Credencial JSON válida');
+          console.log('Proyecto de la credencial:', json.project_id);
+          console.log('Cuenta de servicio:', json.client_email);
+          "
+
+      - name: Validar variables de BigQuery
+        shell: bash
+        run: |
+          echo "Proyecto BigQuery: $BIGQUERY_PROJECT_ID"
+          echo "Dataset BigQuery: $BIGQUERY_DATASET_ID"
+          echo "Tabla BigQuery: $BIGQUERY_TABLE_ID"
+
+          if [ -z "$BIGQUERY_PROJECT_ID" ]; then
+            echo "ERROR: Falta BIGQUERY_PROJECT_ID"
+            exit 1
+          fi
+
+          if [ -z "$BIGQUERY_DATASET_ID" ]; then
+            echo "ERROR: Falta BIGQUERY_DATASET_ID"
+            exit 1
+          fi
+
+          if [ -z "$BIGQUERY_TABLE_ID" ]; then
+            echo "ERROR: Falta BIGQUERY_TABLE_ID"
+            exit 1
+          fi
+
+      - name: Ejecutar monitoreo
+        run: npm start
