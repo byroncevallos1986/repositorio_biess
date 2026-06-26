@@ -18,8 +18,8 @@ const BIGQUERY_TABLE_ID = process.env.BIGQUERY_TABLE_ID || "tb_monitor";
 // FUNCIONES DE FECHA Y TEXTO
 // ==================================================
 
-function obtenerFechaHoraEcuador(fecha) {
-  return new Intl.DateTimeFormat("sv-SE", {
+function obtenerFechaHoraEcuador(fecha = new Date()) {
+  const partes = new Intl.DateTimeFormat("sv-SE", {
     timeZone: ZONA_HORARIA_ECUADOR,
     year: "numeric",
     month: "2-digit",
@@ -28,14 +28,17 @@ function obtenerFechaHoraEcuador(fecha) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false
-  }).format(fecha);
-}
+  }).formatToParts(fecha);
 
-function obtenerFechaHoraEcuadorBigQuery(fecha) {
-  // Ecuador continental usa UTC-05:00.
-  // Este formato permite que BigQuery registre correctamente el instante en un campo TIMESTAMP.
-  const fechaHoraEcuador = obtenerFechaHoraEcuador(fecha).replace(" ", "T");
-  return `${fechaHoraEcuador}-05:00`;
+  const valores = {};
+
+  for (const parte of partes) {
+    valores[parte.type] = parte.value;
+  }
+
+  // Formato correcto para BigQuery cuando el campo Fecha_hora es DATETIME.
+  // No se envía UTC ni zona horaria, porque DATETIME representa fecha/hora local.
+  return `${valores.year}-${valores.month}-${valores.day} ${valores.hour}:${valores.minute}:${valores.second}`;
 }
 
 function recortarTexto(texto, maximo = 1000) {
@@ -61,8 +64,7 @@ async function validarPagina() {
   const fechaRegistro = new Date();
 
   const resultado = {
-    Fecha_hora: obtenerFechaHoraEcuadorBigQuery(fechaRegistro),
-    Fecha_hora_ecuador_texto: obtenerFechaHoraEcuador(fechaRegistro),
+    Fecha_hora: obtenerFechaHoraEcuador(fechaRegistro),
     Estado: "No Disponible",
     Codigo_http: null,
     Tiempo_respuesta_ms: 0,
@@ -160,6 +162,11 @@ async function guardarEnBigQuery(resultado) {
     projectId: BIGQUERY_PROJECT_ID
   });
 
+  // La tabla tb_monitor debe tener el siguiente esquema:
+  // Fecha_hora          DATETIME
+  // Estado              STRING
+  // Codigo_http         INTEGER / INT64
+  // Tiempo_respuesta_ms INTEGER / INT64
   const fila = {
     Fecha_hora: resultado.Fecha_hora,
     Estado: resultado.Estado,
@@ -176,7 +183,7 @@ async function guardarEnBigQuery(resultado) {
   console.log(`Proyecto: ${BIGQUERY_PROJECT_ID}`);
   console.log(`Dataset: ${BIGQUERY_DATASET_ID}`);
   console.log(`Tabla: ${BIGQUERY_TABLE_ID}`);
-  console.log(`Fecha hora Ecuador: ${resultado.Fecha_hora_ecuador_texto}`);
+  console.log(`Fecha hora Ecuador: ${resultado.Fecha_hora}`);
   console.log(`Estado: ${resultado.Estado}`);
   console.log(`Código HTTP: ${resultado.Codigo_http}`);
   console.log(`Tiempo respuesta ms: ${resultado.Tiempo_respuesta_ms}`);
