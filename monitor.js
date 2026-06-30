@@ -12,7 +12,12 @@ const ZONA_HORARIA_ECUADOR = "America/Guayaquil";
 // BigQuery
 const BIGQUERY_PROJECT_ID = process.env.BIGQUERY_PROJECT_ID || "rumdb-499414";
 const BIGQUERY_DATASET_ID = process.env.BIGQUERY_DATASET_ID || "rumds";
-const BIGQUERY_TABLE_ID = process.env.BIGQUERY_TABLE_ID || "tb_monitor";
+
+// IMPORTANTE:
+// Se cambia la tabla destino de tb_monitor a tb_monitor_particionada.
+// Esta tabla debe estar creada previamente en BigQuery y particionada por Fecha_hora.
+const BIGQUERY_TABLE_ID =
+  process.env.BIGQUERY_TABLE_ID || "tb_monitor_particionada";
 
 // ==================================================
 // FUNCIONES DE FECHA Y TEXTO
@@ -162,7 +167,7 @@ async function guardarEnBigQuery(resultado) {
     projectId: BIGQUERY_PROJECT_ID
   });
 
-  // La tabla tb_monitor debe tener el siguiente esquema:
+  // La tabla tb_monitor_particionada debe tener el siguiente esquema:
   // Fecha_hora          DATETIME
   // Estado              STRING
   // Codigo_http         INTEGER / INT64
